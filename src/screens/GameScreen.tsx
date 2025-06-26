@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, TouchableOpacity, Modal } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { SafeAreaView, View, Text, TouchableOpacity, Modal, Animated } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList, Phrase } from '../types';
 
@@ -11,11 +11,35 @@ const GameScreen = ({ route, navigation }: GameScreenProps) => {
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState<boolean | null>(null);
   const [showFeedback, setShowFeedback] = useState(false);
+  const [showMemory, setShowMemory] = useState(true);
+
+  const MEMORY_TIME = 7000;
+
+  // Progress bar state
+  const progress = useRef(new Animated.Value(0)).current;
 
   const phrase = personality.phrases[currentPhraseIndex];
 
+  useEffect(() => {
+    setShowMemory(true);
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: MEMORY_TIME,
+      useNativeDriver: false,
+      easing: t => t,
+    }).start();
+    const timer = setTimeout(() => {
+      setShowMemory(false);
+    }, MEMORY_TIME);
+    return () => {
+      clearTimeout(timer);
+      progress.stopAnimation();
+    };
+  }, [currentPhraseIndex]);
+
   const handleOptionPress = (option: string) => {
-    if (showFeedback) return;
+    if (showFeedback || showMemory) return;
     setSelectedOption(option);
     const correct = option === phrase.answer;
     setIsCorrect(correct);
@@ -35,6 +59,17 @@ const GameScreen = ({ route, navigation }: GameScreenProps) => {
     setIsCorrect(null);
   };
 
+  const renderMemoryText = (currentPhrase: Phrase) => {
+    const parts = currentPhrase.text.split('{blank}');
+    return (
+      <Text className="text-2xl text-center text-gray-700 leading-relaxed">
+        {parts[0]}
+        {currentPhrase.answer}
+        {parts[1]}
+      </Text>
+    );
+  };
+  
   const renderPhraseText = (currentPhrase: Phrase) => {
     const parts = currentPhrase.text.split('{blank}');
     return (
@@ -46,7 +81,7 @@ const GameScreen = ({ route, navigation }: GameScreenProps) => {
         {parts[1]}
       </Text>
     );
-  };
+  }
   
   const getOptionButtonStyle = (option: string) => {
     if (!showFeedback) return "bg-white border-2 border-gray-200";
@@ -74,12 +109,29 @@ const GameScreen = ({ route, navigation }: GameScreenProps) => {
          <View className="w-16"/>
       </View>
 
+      {/* Progress bar for memory phase */}
+      {showMemory && (
+        <View className="w-full h-2 bg-gray-200 mb-2">
+          <Animated.View
+            style={{
+              height: 8,
+              backgroundColor: '#3B82F6', // blue-500
+              width: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: ['0%', '100%'],
+              }),
+              borderRadius: 4,
+            }}
+          />
+        </View>
+      )}
+
       <View className="flex-1 justify-center items-center px-6">
-        {renderPhraseText(phrase)}
+        {showMemory ? renderMemoryText(phrase) : renderPhraseText(phrase)}
       </View>
       
       <View className="px-6 pb-8">
-        {phrase.options.map((option) => (
+        {!showMemory && phrase.options.map((option) => (
           <TouchableOpacity
             key={option}
             className={`p-4 rounded-2xl w-full mb-3 shadow-sm ${getOptionButtonStyle(option)}`}
